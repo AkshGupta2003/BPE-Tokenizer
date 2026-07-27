@@ -4,13 +4,16 @@ A byte-level Byte Pair Encoding tokenizer built from scratch in a Jupyter notebo
 for learning how tokenization actually works. No libraries doing the heavy lifting —
 just Python and the `regex` module for pre-tokenization.
 
-Everything lives in [`tokenizer.ipynb`](tokenizer.ipynb), built up cell by cell.
-See [`NOTES.md`](NOTES.md) for a step-by-step log of how it was built, with examples.
+The reusable implementation is [`bpe_tokenizer.py`](bpe_tokenizer.py). It was worked
+out cell by cell first in [`tokenizer.ipynb`](tokenizer.ipynb).
+
+Consumed by the companion data pipeline repo:
+[LLM-Data-Pipeline](https://github.com/AkshGupta2003/LLM-Data-Pipeline).
 
 ## What it does
 
 - **Train** a vocabulary from text by repeatedly merging the most frequent byte pair.
-- **Save / load** the trained model as a plain-text file (`tokenizer.model`).
+- **Save / load** the trained model as JSON (`tokenizer.json`).
 - **Encode** text into token ids.
 - **Decode** token ids back into text.
 - Handles **any** input (emoji, accents, etc.) with no unknown tokens, because it
@@ -28,21 +31,28 @@ See [`NOTES.md`](NOTES.md) for a step-by-step log of how it was built, with exam
 
 ## Usage
 
-Open the notebook and run the cells top to bottom. The main knob is:
-
 ```python
-vocab_size = 276   # 256 base bytes + however many merges you want
+from bpe_tokenizer import BPETokenizer
+
+tok = BPETokenizer()
+tok.train(text, vocab_size=1000, special_tokens=["<|endoftext|>"])
+
+ids  = tok.encode("some text")
+text = tok.decode(ids)
+
+tok.save("tokenizer.json")
+tok = BPETokenizer.load("tokenizer.json")
 ```
 
-The core functions:
+The main knob is `vocab_size`: 256 base bytes plus however many merges you want.
+
+**One gotcha.** Special tokens are numbered *above* all byte and merge ids, so a
+`vocab_size=1000` model with one special token has **1001** distinct ids. Derive the
+count from the tokenizer rather than hardcoding it — an embedding table sized 1000
+will crash the moment `<|endoftext|>` appears:
 
 ```python
-merges, vocab = ...                       # produced by the training cell
-save("tokenizer.model", merges, pattern, special_tokens)
-merges, vocab, pattern, special_tokens = load("tokenizer.model")
-
-ids  = encode("some text", merges, special_tokens)
-text = decode(ids, vocab, special_tokens)
+vocab_size = len(tok.vocab) + len(tok.special_tokens)
 ```
 
 ## What this is (and isn't)
@@ -54,8 +64,13 @@ GPT-2 and other real byte-level BPE tokenizers use.
 
 ## Requirements
 
-- Python 3
-- `regex` (`pip install regex`) — needed for the pre-tokenization pattern
+- Python 3.11+
+- `regex` — needed for the pre-tokenization pattern
+- `loguru` — logging to `log/tokenizer.log`
+
+```bash
+pip install regex loguru
+```
 
 ## References
 
